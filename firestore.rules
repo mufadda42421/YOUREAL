@@ -1,0 +1,80 @@
+rules_version = '2';
+
+// YOU — owner-only access control.
+// Every document lives under /users/{uid}/... and is readable and writable
+// only by the account whose Firebase Auth uid matches {uid}.
+//
+// NOTE: request.resource is null on reads and on deletes — data validation
+// therefore applies to create/update only, never to reads.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow update: if isOwner(uid);
+      // Clients create their own profile at signup. Locked-down shape enforced.
+      allow create: if isOwner(uid)
+        && request.resource.data.email is string
+        && request.resource.data.fullName is string
+        && request.resource.data.onboardingCompleted is bool;
+
+      // Everything below inherits the same ownership rule.
+      match /worlds/{worldId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid);
+
+        match /widgets/{docId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid);
+        }
+        match /notes/{docId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid)
+            && request.resource.data.body is string
+            && request.resource.data.body.size() <= 20000;
+        }
+        match /tasks/{docId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid)
+            && request.resource.data.text is string
+            && request.resource.data.text.size() <= 2000;
+        }
+        match /journal/{docId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid)
+            && request.resource.data.body is string
+            && request.resource.data.body.size() <= 50000;
+        }
+      }
+
+      match /media/{docId} {
+        allow read, delete: if isOwner(uid);
+        // Metadata may only point at the owner's own storage/Firestore tree.
+        allow create, update: if isOwner(uid)
+          && request.resource.data.storagePath is string
+          && request.resource.data.storagePath.matches('^(firestore:)?users/' + uid + '/.*');
+        // Blob subcollection holds the base64 data URL for this file.
+        match /blob/{blobId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid)
+            && request.resource.data.dataUrl is string;
+        }
+      }
+
+      match /folders/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid);
+      }
+    }
+
+    // No other paths exist in YOU. Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

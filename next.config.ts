@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Cache Components + Partial Prefetching (enabled by the scaffold) cause
+  // multi-second navigation latency and dead first clicks in this client-heavy,
+  // auth-gated app — every route here renders client-side from Firestore anyway.
   turbopack: {
     rules: {
       "*.css": {
